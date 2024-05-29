@@ -9,6 +9,9 @@ export default function HomePage() {
   const [balance, setBalance] = useState(undefined);
   const [depositValue, setDepositValue] = useState(1); // Initial deposit value
   const [withdrawValue, setWithdrawValue] = useState(1); // Initial withdraw value
+  const [pendingTransaction, setPendingTransaction] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date()); // Current date and time
+  const [nickname, setNickname] = useState(""); // State for the nickname
 
   const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
   const atmABI = atm_abi.abi;
@@ -19,15 +22,15 @@ export default function HomePage() {
     }
 
     if (ethWallet) {
-      const account = await ethWallet.request({ method: "eth_accounts" });
-      handleAccount(account);
+      const accounts = await ethWallet.request({ method: "eth_accounts" });
+      handleAccount(accounts);
     }
   };
 
-  const handleAccount = (account) => {
-    if (account) {
-      console.log("Account connected: ", account);
-      setAccount(account);
+  const handleAccount = (accounts) => {
+    if (accounts.length > 0) {
+      console.log("Account connected: ", accounts[0]);
+      setAccount(accounts[0]);
     } else {
       console.log("No account found");
     }
@@ -62,20 +65,26 @@ export default function HomePage() {
 
   const deposit = async () => {
     if (atm) {
+      setPendingTransaction(true);
       let tx = await atm.deposit(depositValue);
+      // User will be prompted by MetaMask to confirm the transaction
       await tx.wait();
+      setPendingTransaction(false);
       getBalance();
     }
   };
 
   const withdraw = async () => {
     if (atm) {
-      if (withdrawValue === 100) {
+      if (withdrawValue <= balance) {
+        setPendingTransaction(true);
         let tx = await atm.withdraw(withdrawValue);
+        // User will be prompted by MetaMask to confirm the transaction
         await tx.wait();
+        setPendingTransaction(false);
         getBalance();
       } else {
-        alert("You don't have enough balance to buy ticket");
+        alert("You don't have enough balance to withdraw this amount");
       }
     }
   };
@@ -106,20 +115,30 @@ export default function HomePage() {
           onChange={(e) => setDepositValue(parseFloat(e.target.value))}
           placeholder="Deposit Amount"
         />
-        <button onClick={deposit}>Top-Up</button>
+        <button onClick={deposit} disabled={pendingTransaction}>Top-Up</button>
         <input
           type="number"
           value={withdrawValue}
           onChange={(e) => setWithdrawValue(parseFloat(e.target.value))}
           placeholder="Withdraw Amount"
         />
-        <button onClick={withdraw}>Pay</button>
+        <button onClick={withdraw} disabled={pendingTransaction}>Pay</button>
+        {pendingTransaction && <p>Transaction is pending... Please confirm in MetaMask.</p>}
       </div>
     );
   };
 
+  const handleNicknameChange = (e) => {
+    setNickname(e.target.value);
+  };
+
   useEffect(() => {
     getWallet();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000); // Update current time every second
+    return () => clearInterval(interval); // Cleanup
   }, []);
 
   return (
@@ -127,6 +146,13 @@ export default function HomePage() {
       <header>
         <h1>Welcome to the Downtown Q'</h1>
       </header>
+      <p>Current Date and Time: {currentTime.toString()}</p>
+      <input
+        type="text"
+        value={nickname}
+        onChange={handleNicknameChange}
+        placeholder="Enter your nickname"
+      />
       {initUser()}
       <style jsx>{`
         .container {
