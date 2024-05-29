@@ -1,46 +1,45 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-//import "hardhat/console.sol";
-
 contract Assessment {
-    address payable public owner;
+    address public owner;
     uint256 public balance;
 
-    event Deposit(uint256 amount);
-    event Withdraw(uint256 amount);
+    event Deposit(address indexed account, uint256 amount);
+    event Withdraw(address indexed account, uint256 amount);
 
-    constructor(uint initBalance) payable {
-        owner = payable(msg.sender);
+    modifier onlyOwner() {
+        require(msg.sender == owner, "You are not the owner of this account");
+        _;
+    }
+
+    constructor(uint256 initBalance) {
+        owner = msg.sender;
         balance = initBalance;
     }
 
-    function getBalance() public view returns(uint256){
+    function getBalance() external view returns(uint256) {
         return balance;
     }
 
-    function deposit(uint256 _amount) public payable {
-        uint _previousBalance = balance;
+    function deposit() external payable {
+        uint256 _previousBalance = balance;
 
-        // make sure this is the owner
-        require(msg.sender == owner, "You are not the owner of this account");
+        // Perform transaction
+        balance += msg.value;
 
-        // perform transaction
-        balance += _amount;
+        // Emit the event
+        emit Deposit(msg.sender, msg.value);
 
-        // assert transaction completed successfully
-        assert(balance == _previousBalance + _amount);
-
-        // emit the event
-        emit Deposit(_amount);
+        // Assert transaction completed successfully
+        assert(balance == _previousBalance + msg.value);
     }
 
-    // custom error
+    // Custom error
     error InsufficientBalance(uint256 balance, uint256 withdrawAmount);
 
-    function withdraw(uint256 _withdrawAmount) public {
-        require(msg.sender == owner, "You are not the owner of this account");
-        uint _previousBalance = balance;
+    function withdraw(uint256 _withdrawAmount) external onlyOwner {
+        uint256 _previousBalance = balance;
         if (balance < _withdrawAmount) {
             revert InsufficientBalance({
                 balance: balance,
@@ -48,13 +47,13 @@ contract Assessment {
             });
         }
 
-        // withdraw the given amount
+        // Withdraw the given amount
         balance -= _withdrawAmount;
 
-        // assert the balance is correct
-        assert(balance == (_previousBalance - _withdrawAmount));
+        // Emit the event
+        emit Withdraw(msg.sender, _withdrawAmount);
 
-        // emit the event
-        emit Withdraw(_withdrawAmount);
+        // Assert the balance is correct
+        assert(balance == (_previousBalance - _withdrawAmount));
     }
 }
