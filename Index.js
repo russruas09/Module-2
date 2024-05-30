@@ -7,11 +7,13 @@ export default function HomePage() {
   const [account, setAccount] = useState(undefined);
   const [atm, setATM] = useState(undefined);
   const [balance, setBalance] = useState(undefined);
-  const [depositValue, setDepositValue] = useState(1); // Initial deposit value
-  const [withdrawValue, setWithdrawValue] = useState(1); // Initial withdraw value
-  const [pendingTransaction, setPendingTransaction] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date()); // Current date and time
-  const [nickname, setNickname] = useState(""); // State for the nickname
+  const [showAccount, setShowAccount] = useState(true);
+  const [showBalance, setShowBalance] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [showAccountInfo, setShowAccountInfo] = useState(false);
 
   const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
   const atmABI = atm_abi.abi;
@@ -37,6 +39,11 @@ export default function HomePage() {
   };
 
   const connectAccount = async () => {
+    if (!name || !email) {
+      alert("Please enter your name and email address.");
+      return;
+    }
+
     if (!ethWallet) {
       alert("MetaMask wallet is required to connect");
       return;
@@ -45,7 +52,6 @@ export default function HomePage() {
     const accounts = await ethWallet.request({ method: "eth_requestAccounts" });
     handleAccount(accounts);
 
-    // once wallet is set we can get a reference to our deployed contract
     getATMContract();
   };
 
@@ -65,39 +71,84 @@ export default function HomePage() {
 
   const deposit = async () => {
     if (atm) {
-      setPendingTransaction(true);
-      let tx = await atm.deposit(depositValue);
-      // User will be prompted by MetaMask to confirm the transaction
+      let tx = await atm.deposit(1);
       await tx.wait();
-      setPendingTransaction(false);
       getBalance();
+      addNotification("Deposit successful");
     }
   };
 
   const withdraw = async () => {
     if (atm) {
-      if (withdrawValue <= balance) {
-        setPendingTransaction(true);
-        let tx = await atm.withdraw(withdrawValue);
-        // User will be prompted by MetaMask to confirm the transaction
-        await tx.wait();
-        setPendingTransaction(false);
-        getBalance();
-      } else {
-        alert("You don't have enough balance to withdraw this amount");
-      }
+      let tx = await atm.withdraw(1);
+      await tx.wait();
+      getBalance();
+      addNotification("Withdrawal successful");
     }
   };
 
+  const addNotification = (message) => {
+    setNotifications([...notifications, message]);
+  };
+
+  const toggleAccountVisibility = () => {
+    setShowAccount(!showAccount);
+  };
+
+  const toggleBalanceVisibility = () => {
+    setShowBalance(!showBalance);
+  };
+
+  const toggleNotificationVisibility = () => {
+    setShowNotifications(!showNotifications);
+  };
+
+  const toggleAccountInfoVisibility = () => {
+    setShowAccountInfo(!showAccountInfo);
+  };
+
+  const renderNotifications = () => {
+    return (
+      <div className="notifications">
+        {notifications.map((notification, index) => (
+          <div key={index} className="notification">
+            {notification}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderAccountInfo = () => {
+    return (
+      <div>
+        <p>Name: {name}</p>
+        <p>Email: {email}</p>
+      </div>
+    );
+  };
+
   const initUser = () => {
-    // Check to see if user has Metamask
     if (!ethWallet) {
-      return <p>Please install Metamask in order to use this ATM.</p>;
+      return (
+        <div>
+          <p>Please install Metamask in order to use this ATM.</p>
+          <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <button onClick={connectAccount}>Click here to open MetaBank</button>
+        </div>
+      );
     }
 
-    // Check to see if user is connected. If not, connect to their account
     if (!account) {
-      return <button onClick={connectAccount}>Click here to Open</button>;
+      return (
+        <div>
+          <p>Please connect your MetaBank.</p>
+          <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <button onClick={connectAccount}>Click here to open MetaBank</button>
+        </div>
+      );
     }
 
     if (balance === undefined) {
@@ -106,57 +157,46 @@ export default function HomePage() {
 
     return (
       <div>
-        <p>Your Account: {account}</p>
-        <p>Ticket Price: 100 </p>
-        <p>Your Balance: {balance}</p>
-        <input
-          type="number"
-          value={depositValue}
-          onChange={(e) => setDepositValue(parseFloat(e.target.value))}
-          placeholder="Deposit Amount"
-        />
-        <button onClick={deposit} disabled={pendingTransaction}>Top-Up</button>
-        <input
-          type="number"
-          value={withdrawValue}
-          onChange={(e) => setWithdrawValue(parseFloat(e.target.value))}
-          placeholder="Withdraw Amount"
-        />
-        <button onClick={withdraw} disabled={pendingTransaction}>Pay</button>
-        {pendingTransaction && <p>Transaction is pending... Please confirm in MetaMask.</p>}
+        <div>
+          {showAccount && <p>Your Account: {account}</p>}
+          {showBalance && <p>Your Balance: {balance}</p>}
+          {showAccountInfo && renderAccountInfo()}
+          <button onClick={deposit}>Deposit 1 ETH</button>
+          <button onClick={withdraw}>Withdraw 1 ETH</button>
+          <button onClick={toggleAccountVisibility}>{showAccount ? "Hide Account Address" : "Show Account Address"}</button>
+          <button onClick={toggleBalanceVisibility}>{showBalance ? "Hide Balance" : "Show Balance"}</button>
+          <button onClick={toggleAccountInfoVisibility}>{showAccountInfo ? "Hide Account Info" : "Show Account Info"}</button>
+          <button onClick={() => setNotifications([])}>Clear Notifications</button>
+          <div>
+            <button onClick={toggleNotificationVisibility}>
+              {showNotifications ? "Hide Notifications" : "Show Notifications"}
+            </button>
+            {showNotifications && renderNotifications()}
+          </div>
+        </div>
       </div>
     );
-  };
-
-  const handleNicknameChange = (e) => {
-    setNickname(e.target.value);
   };
 
   useEffect(() => {
     getWallet();
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000); // Update current time every second
-    return () => clearInterval(interval); // Cleanup
-  }, []);
-
   return (
     <main className="container">
       <header>
-        <h1>Welcome to the Downtown Q'</h1>
+        <h1>Welcome to MetaBank</h1>
       </header>
-      <p>Current Date and Time: {currentTime.toString()}</p>
-      <input
-        type="text"
-        value={nickname}
-        onChange={handleNicknameChange}
-        placeholder="Enter your nickname"
-      />
       {initUser()}
       <style jsx>{`
         .container {
           text-align: center;
+        }
+        .notifications {
+          margin-top: 20px;
+        }
+        .notification {
+          margin-bottom: 5px;
         }
       `}</style>
     </main>
