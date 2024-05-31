@@ -7,13 +7,14 @@ export default function HomePage() {
   const [account, setAccount] = useState(undefined);
   const [atm, setATM] = useState(undefined);
   const [balance, setBalance] = useState(undefined);
-  const [showAccount, setShowAccount] = useState(true);
-  const [showBalance, setShowBalance] = useState(true);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [name, setName] = useState("");
+  const [depositAmountInput, setDepositAmountInput] = useState("");
+  const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
+  const [depositError, setDepositError] = useState(""); // State for deposit error message
+  const [withdrawError, setWithdrawError] = useState(""); // State for withdraw error message
+  const [isBalanceHidden, setIsBalanceHidden] = useState(false); // State for hiding/showing balance
   const [email, setEmail] = useState("");
-  const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [notifications, setNotifications] = useState([]); // State for notifications
 
   const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
   const atmABI = atm_abi.abi;
@@ -29,126 +30,111 @@ export default function HomePage() {
     }
   };
 
-  const handleAccount = (accounts) => {
-    if (accounts.length > 0) {
-      console.log("Account connected: ", accounts[0]);
-      setAccount(accounts[0]);
+  const handleAccount = (account) => {
+    if (account && account.length > 0) {
+      console.log("Account connected: ", account[0]);
+      setAccount(account[0]);
     } else {
       console.log("No account found");
     }
   };
 
   const connectAccount = async () => {
-    if (!name || !email) {
-      alert("Please enter your name and email address.");
-      return;
-    }
-
     if (!ethWallet) {
       alert("MetaMask wallet is required to connect");
       return;
     }
 
-    const accounts = await ethWallet.request({ method: "eth_requestAccounts" });
-    handleAccount(accounts);
-
-    getATMContract();
+    try {
+      const accounts = await ethWallet.request({ method: "eth_requestAccounts" });
+      handleAccount(accounts);
+      getATMContract();
+    } catch (error) {
+      console.error("Error connecting account:", error);
+    }
   };
 
   const getATMContract = () => {
     const provider = new ethers.providers.Web3Provider(ethWallet);
     const signer = provider.getSigner();
     const atmContract = new ethers.Contract(contractAddress, atmABI, signer);
-
     setATM(atmContract);
   };
 
   const getBalance = async () => {
     if (atm) {
-      setBalance((await atm.getBalance()).toNumber());
+      const balance = await atm.getBalance();
+      setBalance(ethers.utils.formatEther(balance));
     }
   };
 
   const deposit = async () => {
-    if (atm) {
-      let tx = await atm.deposit(1);
+    if (!atm || !ethers.utils.isAddress(account)) return;
+    setDepositError(""); // Reset the error message
+
+    try {
+      const depositAmount = ethers.utils.parseEther(depositAmountInput);
+
+      // Check if deposit amount is less than 3 ETH
+      if (depositAmount.lt(ethers.utils.parseEther("3"))) {
+        setDepositError("Deposit amount must be at least 3 ETH");
+        return;
+      }
+
+      const tx = await atm.deposit(depositAmount);
       await tx.wait();
       getBalance();
+      setDepositAmountInput("");
       addNotification("Deposit successful");
+    } catch (error) {
+      console.error("Error depositing:", error);
+      addNotification("Deposit failed");
     }
   };
 
   const withdraw = async () => {
-    if (atm) {
-      let tx = await atm.withdraw(1);
+    if (!atm || !ethers.utils.isAddress(account)) return;
+    setWithdrawError(""); // Reset the error message
+
+    try {
+      const withdrawAmount = ethers.utils.parseEther(withdrawAmountInput);
+
+      // Check if withdraw amount is less than 3 ETH
+      if (withdrawAmount.lt(ethers.utils.parseEther("3"))) {
+        setWithdrawError("Withdraw amount must be at least 3 ETH");
+        return;
+      }
+
+      const tx = await atm.withdraw(withdrawAmount);
       await tx.wait();
       getBalance();
+      setWithdrawAmountInput("");
       addNotification("Withdrawal successful");
+    } catch (error) {
+      console.error("Error withdrawing:", error);
+      addNotification("Withdrawal failed");
     }
+  };
+
+  const toggleBalanceVisibility = () => {
+    setIsBalanceHidden(!isBalanceHidden);
   };
 
   const addNotification = (message) => {
     setNotifications([...notifications, message]);
   };
 
-  const toggleAccountVisibility = () => {
-    setShowAccount(!showAccount);
-  };
-
-  const toggleBalanceVisibility = () => {
-    setShowBalance(!showBalance);
-  };
-
-  const toggleNotificationVisibility = () => {
-    setShowNotifications(!showNotifications);
-  };
-
-  const toggleAccountInfoVisibility = () => {
-    setShowAccountInfo(!showAccountInfo);
-  };
-
-  const renderNotifications = () => {
-    return (
-      <div className="notifications">
-        {notifications.map((notification, index) => (
-          <div key={index} className="notification">
-            {notification}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  const renderAccountInfo = () => {
-    return (
-      <div>
-        <p>Name: {name}</p>
-        <p>Email: {email}</p>
-      </div>
-    );
+  const clearNotifications = () => {
+    setNotifications([]);
   };
 
   const initUser = () => {
     if (!ethWallet) {
-      return (
-        <div>
-          <p>Please install Metamask in order to use this ATM.</p>
-          <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button onClick={connectAccount}>Click here to open MetaBank</button>
-        </div>
-      );
+      return <p>Please install Metamask in order to use this ATM.</p>;
     }
 
     if (!account) {
-      return (
-        <div>
-          <p>Please connect your MetaBank.</p>
-          <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button onClick={connectAccount}>Click here to open MetaBank</button>
-        </div>
-      );
+      return <button onClick={connectAccount}>Click here to open your RussBank</button>;
     }
 
     if (balance === undefined) {
@@ -157,48 +143,82 @@ export default function HomePage() {
 
     return (
       <div>
-        <div>
-          {showAccount && <p>Your Account: {account}</p>}
-          {showBalance && <p>Your Balance: {balance}</p>}
-          {showAccountInfo && renderAccountInfo()}
-          <button onClick={deposit}>Deposit 1 ETH</button>
-          <button onClick={withdraw}>Withdraw 1 ETH</button>
-          <button onClick={toggleAccountVisibility}>{showAccount ? "Hide Account Address" : "Show Account Address"}</button>
-          <button onClick={toggleBalanceVisibility}>{showBalance ? "Hide Balance" : "Show Balance"}</button>
-          <button onClick={toggleAccountInfoVisibility}>{showAccountInfo ? "Hide Account Info" : "Show Account Info"}</button>
-          <button onClick={() => setNotifications([])}>Clear Notifications</button>
-          <div>
-            <button onClick={toggleNotificationVisibility}>
-              {showNotifications ? "Hide Notifications" : "Show Notifications"}
-            </button>
-            {showNotifications && renderNotifications()}
-          </div>
+        <p>Your Account: {account}</p>
+        <p>Your Balance: {isBalanceHidden ? "******" : `${balance} ETH`}</p>
+        <button onClick={toggleBalanceVisibility}>
+          {isBalanceHidden ? "Show Balance" : "Hide Balance"}
+        </button>
+        <br />
+        <input
+          type="text"
+          value={depositAmountInput}
+          onChange={(e) => setDepositAmountInput(e.target.value)}
+          placeholder="Enter deposit amount"
+        />
+        <button onClick={deposit}>Deposit</button>
+        {depositError && <p style={{ color: 'red' }}>{
+          depositError}</p>}
+          <br />
+          <input
+            type="text"
+            value={withdrawAmountInput}
+            onChange={(e) => setWithdrawAmountInput(e.target.value)}
+            placeholder="Enter withdraw amount"
+          />
+          <button onClick={withdraw}>Withdraw</button>
+          {withdrawError && <p style={{ color: 'red' }}>{withdrawError}</p>}
+          <br />
+          <button onClick={clearNotifications}>Clear Notifications</button>
+          {notifications.length > 0 && (
+            <div>
+              <h2>Notifications</h2>
+              <ul>
+                {notifications.map((notification, index) => (
+                  <li key={index}>{notification}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      </div>
+      );
+    };
+  
+    useEffect(() => {
+      getWallet();
+    }, []);
+  
+    return (
+      <main className="container">
+        <header>
+          <h1>Welcome to the RussBank!</h1>
+        </header>
+        <div>
+          <label htmlFor="email">Enter your email:</label>
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Your email"
+          />
+        </div>
+        <div>
+          <label htmlFor="phone">Enter your phone number:</label>
+          <input
+            type="tel"
+            id="phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Your phone number"
+          />
+        </div>
+        {initUser()}
+        <style jsx>{`
+          .container {
+            text-align: center;
+          }
+        `}</style>
+      </main>
     );
-  };
-
-  useEffect(() => {
-    getWallet();
-  }, []);
-
-  return (
-    <main className="container">
-      <header>
-        <h1>Welcome to MetaBank</h1>
-      </header>
-      {initUser()}
-      <style jsx>{`
-        .container {
-          text-align: center;
-        }
-        .notifications {
-          margin-top: 20px;
-        }
-        .notification {
-          margin-bottom: 5px;
-        }
-      `}</style>
-    </main>
-  );
-}
+  }
+  
