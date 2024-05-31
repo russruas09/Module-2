@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-//import "hardhat/console.sol";
-
 contract Assessment {
     address payable public owner;
     uint256 public balance;
+    uint256 public constant MIN_DEPOSIT_AMOUNT = 3 ether;
 
     event Deposit(uint256 amount);
     event Withdraw(uint256 amount);
@@ -15,27 +14,22 @@ contract Assessment {
         balance = initBalance;
     }
 
-    function getBalance() public view returns(uint256){
+    function getBalance() public view returns (uint256) {
         return balance;
     }
 
     function deposit(uint256 _amount) public payable {
-        uint _previousBalance = balance;
-
-        // make sure this is the owner
         require(msg.sender == owner, "You are not the owner of this account");
+        require(_amount >= MIN_DEPOSIT_AMOUNT, "Deposit amount must be greater than 3");
 
-        // perform transaction
+        uint _previousBalance = balance;
         balance += _amount;
 
-        // assert transaction completed successfully
         assert(balance == _previousBalance + _amount);
 
-        // emit the event
         emit Deposit(_amount);
     }
 
-    // custom error
     error InsufficientBalance(uint256 balance, uint256 withdrawAmount);
 
     function withdraw(uint256 _withdrawAmount) public {
@@ -48,13 +42,9 @@ contract Assessment {
             });
         }
 
-        // withdraw the given amount
         balance -= _withdrawAmount;
-
-        // assert the balance is correct
         assert(balance == (_previousBalance - _withdrawAmount));
 
-        // emit the event
         emit Withdraw(_withdrawAmount);
     }
 }
