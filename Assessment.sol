@@ -1,50 +1,82 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-contract Assessment {
-    address payable public owner;
-    uint256 public balance;
-    uint256 public constant MIN_DEPOSIT_AMOUNT = 3 ether;
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-    event Deposit(uint256 amount);
-    event Withdraw(uint256 amount);
+contract Assessment is Ownable {
+    IERC20 public token;
 
-    constructor(uint initBalance) payable {
-        owner = payable(msg.sender);
-        balance = initBalance;
+    event ItemBought(address indexed buyer, uint256 itemId, string itemName);
+    event Deposit(address indexed depositor, uint256 amount);
+    event Withdrawal(address indexed withdrawer, uint256 amount);
+
+    struct ShopItem {
+        uint256 id;
+        string name;
+        uint256 price;
     }
 
-    function getBalance() public view returns (uint256) {
-        return balance;
+    mapping(uint256 => ShopItem) public shopItems;
+    uint256 public itemCount;
+    uint256 public constant minDepositAmount = 3;
+    uint256 public constant minWithdrawalAmount = 3;
+
+    constructor(address _tokenAddress) {
+        token = IERC20(_tokenAddress);
+        itemCount = 0;
     }
 
-    function deposit(uint256 _amount) public payable {
-        require(msg.sender == owner, "You are not the owner of this account");
-        require(_amount >= MIN_DEPOSIT_AMOUNT, "Deposit amount must be greater than 3");
-
-        uint _previousBalance = balance;
-        balance += _amount;
-
-        assert(balance == _previousBalance + _amount);
-
-        emit Deposit(_amount);
+    modifier checkMinDepositAmount(uint256 _amount) {
+        require(_amount >= minDepositAmount, "Deposit amount is below minimum");
+        _;
     }
 
-    error InsufficientBalance(uint256 balance, uint256 withdrawAmount);
+    modifier checkMinWithdrawalAmount(uint256 _amount) {
+        require(_amount >= minWithdrawalAmount, "Withdrawal amount is below minimum");
+        _;
+    }
 
-    function withdraw(uint256 _withdrawAmount) public {
-        require(msg.sender == owner, "You are not the owner of this account");
-        uint _previousBalance = balance;
-        if (balance < _withdrawAmount) {
-            revert InsufficientBalance({
-                balance: balance,
-                withdrawAmount: _withdrawAmount
-            });
+    function addItemToShop(string memory _name, uint256 _price) external onlyOwner {
+        itemCount++;
+        shopItems[itemCount] = ShopItem(itemCount, _name, _price);
+    }
+
+    function removeItemFromShop(uint256 _itemId) external onlyOwner {
+        require(_itemId <= itemCount, "Item does not exist");
+        delete shopItems[_itemId];
+    }
+
+    function buyItemFromShop(uint256 _itemId) external {
+        require(_itemId <= itemCount, "Item does not exist");
+        ShopItem memory item = shopItems[_itemId];
+        require(token.balanceOf(msg.sender) >= item.price, "Insufficient balance");
+
+        token.transferFrom(msg.sender, address(this), item.price);
+        emit ItemBought(msg.sender, item.id, item.name);
+    }
+
+    function checkItemOwnership(uint256 _itemId, address _owner) external view returns (bool) {
+        require(_itemId <= itemCount, "Item does not exist");
+        ShopItem memory item = shopItems[_itemId];
+        return token.balanceOf(_owner) >= item.price;
+    }
+
+    function getShopItems() external view returns (ShopItem[] memory) {
+        ShopItem[] memory items = new ShopItem[](itemCount);
+        for (uint256 i = 1; i <= itemCount; i++) {
+            items[i - 1] = shopItems[i];
         }
+        return items;
+    }
 
-        balance -= _withdrawAmount;
-        assert(balance == (_previousBalance - _withdrawAmount));
+    function deposit(uint256 _amount) external checkMinDepositAmount(_amount) {
+        token.transferFrom(msg.sender, address(this), _amount);
+        emit Deposit(msg.sender, _amount);
+    }
 
-        emit Withdraw(_withdrawAmount);
+    function withdraw(uint256 _amount) external checkMinWithdrawalAmount(_amount) {
+        token.transfer(msg.sender, _amount);
+        emit Withdrawal(msg.sender, _amount);
     }
 }
