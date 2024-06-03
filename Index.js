@@ -15,6 +15,13 @@ export default function HomePage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [notifications, setNotifications] = useState([]); // State for notifications
+  const [isSignedUp, setIsSignedUp] = useState(false); // State for sign-up
+  const [shopItems, setShopItems] = useState([
+    { id: 1, name: "Sword", price: ethers.utils.parseEther("50") },
+    { id: 2, name: "Shield", price: ethers.utils.parseEther("30") },
+    { id: 3, name: "Potion", price: ethers.utils.parseEther("20") }
+  ]);
+  const [inventory, setInventory] = useState([]); // State for user's inventory
 
   const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
   const atmABI = atm_abi.abi;
@@ -116,6 +123,33 @@ export default function HomePage() {
     }
   };
 
+  const buyItem = async (itemId, itemName, itemPrice) => {
+    if (!atm || !ethers.utils.isAddress(account)) return;
+
+    try {
+      // Check if user has enough balance
+      if (parseFloat(balance) < parseFloat(ethers.utils.formatEther(itemPrice))) {
+        addNotification("Insufficient balance to buy this item");
+        return;
+      }
+
+      // Deduct item price from balance
+      const newBalance = ethers.utils.parseEther(balance).sub(itemPrice);
+      await atm.deposit(newBalance);
+
+      // Add the bought item to the inventory
+      const updatedInventory = [...inventory, { id: itemId, name: itemName }];
+      setInventory(updatedInventory);
+
+      addNotification(`Bought ${itemName} for ${ethers.utils.formatEther(itemPrice)} ETH`);
+      // Update the balance state
+      setBalance(newBalance);
+    } catch (error) {
+      console.error("Error buying item:", error);
+      addNotification("Failed to buy item");
+    }
+  };
+
   const toggleBalanceVisibility = () => {
     setIsBalanceHidden(!isBalanceHidden);
   };
@@ -128,13 +162,21 @@ export default function HomePage() {
     setNotifications([]);
   };
 
+  const handleSignUp = () => {
+    if (email && phone) {
+      setIsSignedUp(true);
+    } else {
+      alert("Please enter both email and phone number.");
+    }
+  };
+
   const initUser = () => {
     if (!ethWallet) {
       return <p>Please install Metamask in order to use this ATM.</p>;
     }
 
     if (!account) {
-      return <button onClick={connectAccount}>Click here to open your RussBank</button>;
+      return <button onClick={connectAccount}>Click here to open the item shop</button>;
     }
 
     if (balance === undefined) {
@@ -155,70 +197,107 @@ export default function HomePage() {
           onChange={(e) => setDepositAmountInput(e.target.value)}
           placeholder="Enter deposit amount"
         />
-        <button onClick={deposit}>Deposit</button>
-        {depositError && <p style={{ color: 'red' }}>{
-          depositError}</p>}
-          <br />
-          <input
-            type="text"
-            value={withdrawAmountInput}
-            onChange={(e) => setWithdrawAmountInput(e.target.value)}
-            placeholder="Enter withdraw amount"
-          />
-          <button onClick={withdraw}>Withdraw</button>
-          {withdrawError && <p style={{ color: 'red' }}>{withdrawError}</p>}
-          <br />
-          <button onClick={clearNotifications}>Clear Notifications</button>
-          {notifications.length > 0 && (
-            <div>
-              <h2>Notifications</h2>
-              <ul>
-                {notifications.map((notification, index) => (
-                  <li key={index}>{notification}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      );
-    };
-  
-    useEffect(() => {
-      getWallet();
-    }, []);
-  
-    return (
-      <main className="container">
-        <header>
-          <h1>Welcome to the RussBank!</h1>
-        </header>
+        <button onClick={deposit}>Deposit
+        </button>
+        {depositError && <p style={{ color: 'red' }}>{depositError}</p>}
+        <br />
+        <input
+          type="text"
+          value={withdrawAmountInput}
+          onChange={(e) => setWithdrawAmountInput(e.target.value)}
+          placeholder="Enter withdraw amount"
+        />
+        <button onClick={withdraw}>Withdraw</button>
+        {withdrawError && <p style={{ color: 'red' }}>{withdrawError}</p>}
+        <br />
         <div>
-          <label htmlFor="email">Enter your email:</label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Your email"
-          />
+          <h2>Item Shop</h2>
+          <ul>
+            {shopItems.map((item) => (
+              <li key={item.id}>
+                {item.name} - {ethers.utils.formatEther(item.price)} ETH
+                <button onClick={() => buyItem(item.id, item.name, item.price)}>Buy</button>
+              </li>
+            ))}
+          </ul>
         </div>
+        <br />
         <div>
-          <label htmlFor="phone">Enter your phone number:</label>
-          <input
-            type="tel"
-            id="phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Your phone number"
-          />
+          <h2>Inventory</h2>
+          <ul>
+            {inventory.map((item) => (
+              <li key={item.id}>{item.name}</li>
+            ))}
+          </ul>
         </div>
-        {initUser()}
-        <style jsx>{`
-          .container {
-            text-align: center;
-          }
-        `}</style>
-      </main>
+        <br />
+        <p>Email: {email}</p>
+        <p>Phone: {phone}</p>
+        <br />
+        <button onClick={clearNotifications}>Clear Notifications</button>
+        {notifications.length > 0 && (
+          <div>
+            <h2>Notifications</h2>
+            <ul>
+              {notifications.map((notification, index) => (
+                <li key={index}>{notification}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     );
-  }
-  
+  };
+
+  useEffect(() => {
+    getWallet();
+  }, []);
+
+  return (
+    <main className="container">
+      <header>
+        <h1>Welcome to Item Game Shop!</h1>
+      </header>
+      {!isSignedUp ? (
+        <div className="user-info">
+          <div>
+            <label htmlFor="email">Enter your email:</label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Your email"
+            />
+          </div>
+          <div>
+            <label htmlFor="phone">Enter your phone number:</label>
+            <input
+              type="tel"
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Your phone number"
+            />
+          </div>
+          <button onClick={handleSignUp}>Sign In</button>
+        </div>
+      ) : (
+        <div className="atm-functions">
+          {initUser()}
+        </div>
+      )}
+      <style jsx>{`
+        .container {
+          text-align: center;
+        }
+        .user-info {
+          margin-bottom: 20px;
+        }
+        .atm-functions {
+          margin-top: 20px;
+        }
+      `}</style>
+    </main>
+  );
+}
